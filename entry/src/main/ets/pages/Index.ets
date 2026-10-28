@@ -287,7 +287,7 @@ struct Index {
           this.detail = '正在上传语音文件 ' + value.toString() + '%';
         }, this.serverMode);
       }
-      this.connectionMessage = '请求已发送，等待服务端状态推送';
+      // 状态文字以服务端后续推送为准，避免覆盖可能已到达的首条进度消息。
     } catch (error) {
       this.phase = 'failure';
       this.errorText = '发送失败：' + String(error);
@@ -521,8 +521,14 @@ struct Index {
       Text(this.phase === 'found' ? '已经找到目标人员' : this.phase === 'failure' ? '任务出现异常' : '正在寻找中')
         .fontSize(23).fontWeight(FontWeight.Bold).fontColor(INK);
       Text(this.detail).fontSize(13).fontColor(SUB).textAlign(TextAlign.Center);
-      Text(this.wsConnected ? '● 状态通道已连接（模拟）' : '● 状态通道连接中 / 中断')
+      Text(this.wsConnected ? '● WebSocket 状态通道已连接' : '● WebSocket 状态通道未连接')
         .fontSize(12).fontColor(this.wsConnected ? '#238B55' : '#C98A24');
+      Row() {
+        Text('任务进度').fontSize(12).fontColor(SUB);
+        Blank();
+        Text(this.progress.toString() + '%').fontSize(12).fontWeight(FontWeight.Bold).fontColor(PURPLE);
+      }.width('100%');
+      Progress({ value: this.progress, total: 100, type: ProgressType.Linear }).color(PURPLE).height(6);
       Column({ space: 14 }) {
         this.StageRow('已接收任务', 0);
         this.StageRow('正在扫描附近设备', 1);
