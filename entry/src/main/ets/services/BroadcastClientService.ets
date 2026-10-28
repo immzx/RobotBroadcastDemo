@@ -301,7 +301,7 @@ export class BroadcastClientService {
         sent += readLength;
         onProgress(Math.min(100, Math.floor(sent * 100 / fileSize)));
       }
-      fs.closeSync(file);
+      fs.closeSync(file.fd);
       file = undefined;
 
       const savedPromise: Promise<ServerMessage> = this.waitForMessage('audio_saved', uploadId, 15000);
@@ -320,7 +320,7 @@ export class BroadcastClientService {
     } catch (error) {
       if (file !== undefined) {
         try {
-          fs.closeSync(file);
+          fs.closeSync(file.fd);
         } catch (_) {
           // Best-effort resource cleanup.
         }
