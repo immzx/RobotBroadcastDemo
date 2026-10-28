@@ -193,46 +193,102 @@ struct Index {
     this.phase = 'idle';
   }
 
-  private onTaskEvent(event: BroadcastTaskEvent): void {
-    if (event.taskId !== this.taskId) {
+  private onConnectionState(state: ClientConnectionState): void {
+    this.serverConnected = state.connected;
+    this.wsConnected = state.connected;
+    this.serverConnecting = false;
+    this.connectionMessage = state.message;
+  }
+
+  private onServerMessage(message: ServerMessage): void {
+    if (message.type === 'server_hello') {
+      this.connectionMessage = '已连接服务端，协议版本 ' + (message.protocolVersion ?? 1).toString();
       return;
     }
-    this.stage = event.stage;
-    this.detail = event.message;
-    this.wsConnected = event.connected;
-    if (event.stage === 'found') {
+    if (message.type !== 'broadcast_progress') {
+      if (message.type === 'audio_saved') {
+        this.connectionMessage = '音频已保存到服务端';
+      } else if (message.type === 'audio_error') {
+        this.connectionMessage = '音频接收失败：' + (message.message ?? '未知错误');
+      }
+      return;
+    }
+    this.taskId = message.taskId ?? this.taskId;
+    this.stage = message.stage ?? message.status ?? this.stage;
+    this.progress = message.progress ?? this.progress;
+    this.detail = message.message ?? this.detail;
+    const status: string = message.status ?? 'searching';
+    if (status === 'found' || status === 'completed') {
+      this.progress = 100;
       this.phase = 'found';
-    } else if (event.stage === 'failed') {
+    } else if (status === 'failed' || status === 'cancelled') {
       this.phase = 'failure';
-      this.errorText = event.message;
+      this.errorText = message.message ?? '广播任务未完成';
     } else {
       this.phase = 'tracking';
     }
   }
 
+  private async connectServer(): Promise<void> {
+    if (this.serverConnected || this.serverConnecting) {
+      return;
+    }
+    this.serverConnecting = true;
+    this.connectionMessage = '正在连接服务端…';
+    try {
+      await this.client.connect(this.serverUrl, (message: ServerMessage) => this.onServerMessage(message),
+        (state: ClientConnectionState) => this.onConnectionState(state));
+      this.serverConnected = true;
+      this.connectionMessage = 'WebSocket 已连接';
+    } catch (error) {
+      this.serverConnected = false;
+      this.serverConnecting = false;
+      this.connectionMessage = '连接失败：' + String(error);
+    }
+  }
+
+  private async disconnectServer(): Promise<void> {
+    await this.client.disconnect('manual_disconnect');
+    this.serverConnected = false;
+    this.wsConnected = false;
+    this.connectionMessage = '已主动断开连接';
+  }
+
   private async startBroadcast(kind: string): Promise<void> {
-    if (!this.online || this.phase === 'tracking') {
+    if (this.phase === 'tracking') {
+      return;
+    }
+    if (!this.serverConnected) {
+      this.phase = 'failure';
+      this.errorText = '请先连接 Broadcast Server';
+      this.detail = this.errorText;
       return;
     }
     if (kind === 'audio' && !this.audioPath) {
+      this.phase = 'failure';
+      this.errorText = '请先录制并确认语音';
+      this.detail = this.errorText;
       return;
     }
     this.mode = 'tracking';
     this.phase = 'tracking';
     this.progress = 0;
-    this.taskId = 'broadcast_' + Date.now().toString();
-    const id: string = this.taskId;
+    this.taskId = '';
+    this.stage = 'discovering_device';
+    this.detail = kind === 'text' ? '正在发送固定文本指令…' : '正在上传语音文件…';
+    this.errorText = '';
     try {
       await this.player.release();
-      await this.status.startDemo(id, (event: BroadcastTaskEvent) => this.onTaskEvent(event));
       if (kind === 'text') {
-        await this.transfer.sendText(this.phrases[this.phraseIndex], this.online);
+        await this.client.sendTextBroadcast(this.phrases[this.phraseIndex], this.serverMode);
       } else {
-        await this.transfer.sendAudio(this.audioPath, this.online, (value: number) => { this.progress = value; });
+        await this.client.sendAudioBroadcast(this.audioPath, (value: number) => {
+          this.progress = value;
+          this.detail = '正在上传语音文件 ' + value.toString() + '%';
+        }, this.serverMode);
       }
-      this.status.markSent();
+      this.connectionMessage = '请求已发送，等待服务端状态推送';
     } catch (error) {
-      this.status.stop();
       this.phase = 'failure';
       this.errorText = '发送失败：' + String(error);
       this.detail = this.errorText;
