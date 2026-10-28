@@ -297,7 +297,9 @@ struct Index {
 
   private async finish(): Promise<void> {
     this.clearTimer();
-    this.status.stop();
+    await this.client.closeSession(this.taskId, this.phase === 'found' ? 'task_completed' : 'user_finished', this.phase === 'found');
+    this.serverConnected = false;
+    this.wsConnected = false;
     await this.player.release();
     await this.recorder.release();
     this.page = 'home';
@@ -335,6 +337,38 @@ struct Index {
         .backgroundColor(this.online ? '#E5F7EC' : '#FFF0F0').borderRadius(16)
         .onClick(() => { this.online = !this.online; });
     }.width('100%').alignItems(VerticalAlign.Center);
+  }
+
+  @Builder
+  private ConnectionPanel() {
+    Column({ space: 10 }) {
+      Row() {
+        Column({ space: 4 }) {
+          Text('广播服务连接').fontSize(15).fontWeight(FontWeight.Bold).fontColor(INK);
+          Text(this.serverConnected ? '● 已连接' : (this.serverConnecting ? '● 连接中' : '● 未连接'))
+            .fontSize(11).fontColor(this.serverConnected ? '#238B55' : '#C98A24');
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1);
+        Button(this.serverConnected ? '断开' : (this.serverConnecting ? '连接中…' : '连接服务'))
+          .height(36).fontSize(12).fontColor(this.serverConnected ? '#D94850' : '#FFFFFF')
+          .backgroundColor(this.serverConnected ? '#FFF0F0' : PURPLE)
+          .enabled(!this.serverConnecting)
+          .onClick(() => this.serverConnected ? this.disconnectServer() : this.connectServer());
+      }.width('100%');
+      TextInput({ text: this.serverUrl, placeholder: 'ws://192.168.1.20:8765' })
+        .width('100%').height(42).fontSize(13).backgroundColor('#F7F7FA').borderRadius(10)
+        .onChange((value: string) => { this.serverUrl = value; });
+      Row({ space: 8 }) {
+        Button('模拟进度').layoutWeight(1).height(34).fontSize(12)
+          .fontColor(this.serverMode === 'mock' ? '#FFFFFF' : PURPLE)
+          .backgroundColor(this.serverMode === 'mock' ? PURPLE : '#F0ECFF')
+          .onClick(() => { this.serverMode = 'mock'; });
+        Button('真实进度').layoutWeight(1).height(34).fontSize(12)
+          .fontColor(this.serverMode === 'real' ? '#FFFFFF' : PURPLE)
+          .backgroundColor(this.serverMode === 'real' ? PURPLE : '#F0ECFF')
+          .onClick(() => { this.serverMode = 'real'; });
+      }.width('100%');
+      Text(this.connectionMessage).fontSize(11).fontColor(SUB).maxLines(2);
+    }.padding(14).backgroundColor('#FFFFFF').borderRadius(18).width('100%');
   }
 
   @Builder
@@ -490,10 +524,10 @@ struct Index {
       Text(this.wsConnected ? '● 状态通道已连接（模拟）' : '● 状态通道连接中 / 中断')
         .fontSize(12).fontColor(this.wsConnected ? '#238B55' : '#C98A24');
       Column({ space: 14 }) {
-        this.StageRow('已发送任务', 'accepted');
-        this.StageRow('设备正在播报', 'speaking');
-        this.StageRow('等待人员响应', 'searching');
-        this.StageRow('已找到', 'found');
+        this.StageRow('已接收任务', 0);
+        this.StageRow('正在扫描附近设备', 1);
+        this.StageRow('正在匹配 / 确认设备', 2);
+        this.StageRow('已找到目标', 3);
       }.padding(18).width('100%').backgroundColor('#FBFAFF').borderRadius(18);
       if (this.phase === 'found') {
         Button('完成').width('100%').height(50).fontColor('#FFFFFF').backgroundColor('#22A765')
@@ -510,13 +544,22 @@ struct Index {
       .alignItems(HorizontalAlign.Center);
   }
 
+  private stageIndex(): number {
+    if (this.phase === 'found') { return 3; }
+    if (this.phase === 'failure') { return -1; }
+    if (this.stage === 'confirming_device' || this.progress >= 70) { return 2; }
+    if (this.stage === 'matching_device' || this.progress >= 30) { return 1; }
+    if (this.taskId.length > 0 || this.phase === 'tracking') { return 0; }
+    return -1;
+  }
+
   @Builder
-  private StageRow(label: string, value: string) {
+  private StageRow(label: string, index: number) {
     Row({ space: 10 }) {
-      Text(this.status.hasReached(this.stage, value) ? '✓' : '○')
-        .fontSize(16).fontColor(this.status.hasReached(this.stage, value) ? '#22A765' : SUB);
+      Text(this.stageIndex() >= index ? '✓' : '○')
+        .fontSize(16).fontColor(this.stageIndex() >= index ? '#22A765' : SUB);
       Text(label).fontSize(14).fontColor(INK).layoutWeight(1);
-      if (this.stage === value) {
+      if (this.stageIndex() === index) {
         Text('当前').fontSize(11).fontColor(PURPLE);
       }
     }.width('100%');
@@ -528,6 +571,7 @@ struct Index {
         this.Home();
       } else {
         this.TopBar('远程广播', true);
+        this.ConnectionPanel();
         Scroll() {
           Column({ space: 14 }) {
             if (this.mode === 'choose') {
