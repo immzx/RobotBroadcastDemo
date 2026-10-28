@@ -530,10 +530,10 @@ struct Index {
       }.width('100%');
       Progress({ value: this.progress, total: 100, type: ProgressType.Linear }).color(PURPLE).height(6);
       Column({ space: 14 }) {
-        this.StageRow('已接收任务', 0);
-        this.StageRow('正在扫描附近设备', 1);
-        this.StageRow('正在匹配 / 确认设备', 2);
-        this.StageRow('已找到目标', 3);
+        this.StageRow('广播任务已接收', 0);
+        this.StageRow('正在寻找目标人员', 1);
+        this.StageRow('正在确认人员回应', 2);
+        this.StageRow('已找到目标人员', 3);
       }.padding(18).width('100%').backgroundColor('#FBFAFF').borderRadius(18);
       if (this.phase === 'found') {
         Button('完成').width('100%').height(50).fontColor('#FFFFFF').backgroundColor('#22A765')
@@ -553,8 +553,8 @@ struct Index {
   private stageIndex(): number {
     if (this.phase === 'found') { return 3; }
     if (this.phase === 'failure') { return -1; }
-    if (this.stage === 'confirming_device' || this.progress >= 70) { return 2; }
-    if (this.stage === 'matching_device' || this.progress >= 30) { return 1; }
+    if (this.stage === 'confirming_device' || this.stage === 'confirming_response' || this.progress >= 70) { return 2; }
+    if (this.stage === 'matching_device' || this.stage === 'matching_person' || this.progress >= 30) { return 1; }
     if (this.taskId.length > 0 || this.phase === 'tracking') { return 0; }
     return -1;
   }
