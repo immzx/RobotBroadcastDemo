@@ -1,0 +1,9 @@
+{
+  "string": [
+    { "name": "app_name", "value": "扫地机广播找人" },
+    { "name": "module_desc", "value": "扫地机广播找人交互 Demo" },
+    { "name": "start_window_background", "value": "#F6F7F5" },
+    { "name": "microphone_reason", "value": "录制你要通过扫地机播报的语音" },
+    { "name": "network_reason", "value": "向局域网内的扫地机发送语音文件" }
+  ]
+}
