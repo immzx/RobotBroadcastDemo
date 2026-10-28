@@ -1,7 +1,6 @@
 import { abilityAccessCtrl, common } from '@kit.AbilityKit';
 import { AudioPlaybackService, AudioRecorderService } from '../services/AudioRecorderService';
-import { LanTransferService } from '../services/LanTransferService';
-import { BroadcastStatusService, BroadcastTaskEvent } from '../services/BroadcastStatusService';
+import { BroadcastClientService, ServerMessage, ClientConnectionState } from '../services/BroadcastClientService';
 
 const PURPLE: string = '#7357F5';
 const INK: string = '#20232D';
@@ -13,8 +12,7 @@ const BG: string = '#F6F7F5';
 struct Index {
   private recorder: AudioRecorderService = new AudioRecorderService();
   private player: AudioPlaybackService = new AudioPlaybackService();
-  private transfer: LanTransferService = new LanTransferService();
-  private status: BroadcastStatusService = new BroadcastStatusService();
+  private client: BroadcastClientService = new BroadcastClientService();
   private timer: number = -1;
   private pressActive: boolean = false;
   private startPending: boolean = false;
@@ -37,10 +35,15 @@ struct Index {
   @State private wsConnected: boolean = false;
   @State private progress: number = 0;
   @State private errorText: string = '';
+  @State private serverUrl: string = 'ws://192.168.1.20:8765';
+  @State private serverConnected: boolean = false;
+  @State private serverConnecting: boolean = false;
+  @State private connectionMessage: string = '填写服务端手机 IP 后连接';
+  @State private serverMode: string = 'mock';
 
   aboutToDisappear(): void {
     this.clearTimer();
-    this.status.stop();
+    this.client.disconnect('page_disappear').catch(() => {});
     this.player.release().catch(() => {});
     this.recorder.release().catch(() => {});
   }
