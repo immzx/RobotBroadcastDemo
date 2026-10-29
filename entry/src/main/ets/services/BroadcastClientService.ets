@@ -26,6 +26,25 @@ export interface ClientConnectionState {
   message: string;
 }
 
+/**
+ * All client-to-server JSON messages use this explicitly declared interface.
+ * This also keeps ArkTS strict object-literal checking enabled.
+ */
+interface ClientRequestMessage {
+  type: string;
+  protocolVersion?: number;
+  taskId?: string;
+  mode?: string;
+  commandText?: string;
+  source?: string;
+  timestamp?: number;
+  uploadId?: string;
+  fileName?: string;
+  mimeType?: string;
+  size?: number;
+  reason?: string;
+}
+
 interface MessageWaiter {
   type: string;
   uploadId: string;
@@ -155,7 +174,7 @@ export class BroadcastClientService {
     this.stateCallback?.({ connected: this.connected, message: message });
   }
 
-  private async sendJson(payload: Object): Promise<void> {
+  private async sendJson(payload: ClientRequestMessage): Promise<void> {
     if (!this.socket || !this.connected) {
       throw new Error('尚未连接 Broadcast Server');
     }
